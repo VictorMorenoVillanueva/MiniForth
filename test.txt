@@ -1,0 +1,121 @@
+>>> from forth import interpret
+
+# Sintaxi bàsica: números i .s
+>>> interpret("1 2 3 .s")
+[1, 2, 3]
+
+# Operacions aritmètiques bàsiques
+>>> interpret("2 3 + .")
+5
+>>> interpret("5 2 - .")
+3
+>>> interpret("4 3 * .")
+12
+>>> interpret("7 2 / .")
+3
+>>> interpret("7 2 mod .")
+1
+
+# Manipulació de la pila
+>>> interpret("1 2 3 .s swap .s")
+[1, 2, 3]
+[1, 3, 2]
+>>> interpret("1 2 .s dup .s")
+[1, 2]
+[1, 2, 2]
+>>> interpret("1 2 3 .s 2dup .s")
+[1, 2, 3]
+[1, 2, 3, 2, 3]
+>>> interpret("1 2 .s over .s")
+[1, 2]
+[1, 2, 1]
+>>> interpret("1 2 3 4 .s 2over .s")
+[1, 2, 3, 4]
+[1, 2, 3, 4, 1, 2]
+>>> interpret("1 2 3 .s rot .s")
+[1, 2, 3]
+[2, 3, 1]
+>>> interpret("1 2 .s drop .s")
+[1, 2]
+[1]
+>>> interpret("1 2 3 .s 2drop .s")
+[1, 2, 3]
+[1]
+
+# Relacionals
+>>> interpret("2 3 < .")
+-1
+>>> interpret("3 2 < .")
+0
+>>> interpret("2 3 <= .")
+-1
+>>> interpret("3 3 <= .")
+-1
+>>> interpret("4 3 > .")
+-1
+>>> interpret("3 4 > .")
+0
+>>> interpret("3 3 >= .")
+-1
+>>> interpret("2 3 >= .")
+0
+>>> interpret("5 5 = .")
+-1
+>>> interpret("5 4 = .")
+0
+>>> interpret("5 4 <> .")
+-1
+>>> interpret("5 5 <> .")
+0
+
+# Booleans (0 fals, -1 cert)
+>>> interpret("2 3 <> -1 and .")
+-1
+>>> interpret("-1 -1 and .")
+-1
+>>> interpret("-1 0 and .")
+0
+>>> interpret("0 0 or .")
+0
+>>> interpret("-1 0 or .")
+-1
+>>> interpret("-1 not .")
+0
+>>> interpret("0 not .")
+-1
+
+# Funcions senzilles
+>>> interpret(": doble 2 * ; 3 doble .")
+6
+>>> interpret(": doble 2 * ; : f doble 1 + ; 3 f .")
+7
+
+# Condicionals
+>>> interpret(": abs dup 0 < if 0 swap - endif ; -2 abs .")
+2
+>>> interpret(": min 2dup < if drop else swap drop endif ; 3 2 min .")
+2
+
+# Funció signe (versió corregida)
+>>> interpret(": signe dup 0 < if drop -1 else 0 > if 1 else 0 endif endif ; -2 signe .s")
+[-1]
+>>> interpret(": signe dup 0 < if drop -1 else 0 > if 1 else 0 endif endif ; 0 signe .s")
+[0]
+>>> interpret(": signe dup 0 < if drop -1 else 0 > if 1 else 0 endif endif ; 3 signe .s")
+[1]
+
+# Recursivitat: factorial
+>>> interpret(": faux dup rot * swap 1 - dup 2 < if drop else recurse endif ; : factorial dup 2 < if drop 1 else dup 1 - faux endif ; 4 factorial .")
+24
+>>> interpret(": faux dup rot * swap 1 - dup 2 < if drop else recurse endif ; : factorial dup 2 < if drop 1 else dup 1 - faux endif ; 0 factorial .")
+1
+
+# Errors: pila buida
+>>> interpret("1 . .")
+1
+Error: pila buida!
+
+# Errors: divisió per zero
+>>> interpret("1 0 / .s")
+Error: divisió per zero!
+[0]
