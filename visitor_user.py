@@ -1,7 +1,7 @@
 # visitor_user.py
 
 from forthVisitor import forthVisitor as AntlrForthVisitor
-from LP.machine import Machine
+from machine import Machine
 
 
 class ForthExecutor(AntlrForthVisitor):

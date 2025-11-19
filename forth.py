@@ -4,8 +4,8 @@ from antlr4 import InputStream, CommonTokenStream
 
 from forthLexer import forthLexer
 from forthParser import forthParser
-from LP.machine import Machine
-from LP.visitor_user import ForthExecutor
+from machine import Machine
+from visitor_user import ForthExecutor
 
 
 def interpret(code: str):
