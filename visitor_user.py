@@ -1,33 +1,81 @@
-# visitor_user.py
-
 from forthVisitor import forthVisitor as AntlrForthVisitor
 from machine import Machine
 
 
 class ForthExecutor(AntlrForthVisitor):
+
     def __init__(self, machine: Machine):
         super().__init__()
-        self.machine = machine
-        self.words: dict[str, list] = {}   # nom -> llista d'instructions (ctx)
-        self.call_stack: list[str] = []    # per a recurse
+        self.m = machine
+        self.words = {}
+        self.call_stack = []
 
-    # --- programes i definicions ---
+        # Operadors binaris de tipus a op b
+        self.binary_ops = {
+            '+':  lambda a, b: a + b,
+            '-':  lambda a, b: a - b,
+            '*':  lambda a, b: a * b,
+            '/':  self._safe_div,
+            'mod': self._safe_mod,
+        }
+
+        # Relacionals → retornen 0 o -1
+        self.rel_ops = {
+            '<':  lambda a, b: -1 if a < b else 0,
+            '<=': lambda a, b: -1 if a <= b else 0,
+            '>':  lambda a, b: -1 if a > b else 0,
+            '>=': lambda a, b: -1 if a >= b else 0,
+            '=':  lambda a, b: -1 if a == b else 0,
+            '<>': lambda a, b: -1 if a != b else 0,
+        }
+
+        # Booleans → retornen 0 o -1
+        self.bool_ops = {
+            'and': lambda a, b: -1 if (a != 0 and b != 0) else 0,
+            'or':  lambda a, b: -1 if (a != 0 or b != 0) else 0,
+        }
+
+    # ---------------------------
+    # Funcions auxiliars
+    # ---------------------------
+
+    def _pop2(self):
+        """Extreu dos valors comprovant pila."""
+        b = self.m.pop()
+        a = self.m.pop()
+        if a is None or b is None:
+            return None, None
+        return a, b
+
+    def _safe_div(self, a, b):
+        if b == 0:
+            print("Error: divisió per zero!")
+            return 0
+        return a // b
+
+    def _safe_mod(self, a, b):
+        if b == 0:
+            print("Error: divisió per zero!")
+            return 0
+        return a % b
+
+    # ---------------------------
+    # Execució de paraules
+    # ---------------------------
 
     def visitProgram(self, ctx):
         for elem in ctx.element():
             self.visit(elem)
-        return self.machine.last_output
-
-    def visitDefinition(self, ctx):
-        name = ctx.IDENT().getText()
-        body = list(ctx.instruction())
-        self.words[name] = body
         return None
 
-    def _execute_word(self, name: str):
+    def visitDefinition(self, ctx):
+        self.words[ctx.IDENT().getText()] = list(ctx.instruction())
+        return None
+
+    def _execute_word(self, name):
         body = self.words.get(name)
         if body is None:
-            #print(f"Error: paraula '{name}' no definida!") <-- Això o no?
+            print(f"Error: paraula '{name}' no definida!")
             return
         self.call_stack.append(name)
         try:
@@ -36,245 +84,138 @@ class ForthExecutor(AntlrForthVisitor):
         finally:
             self.call_stack.pop()
 
-    # --- instruccions bàsiques ---
+    # ---------------------------
+    # Instruccions
+    # ---------------------------
 
     def visitNumberInstr(self, ctx):
-        value = int(ctx.NUMBER().getText())
-        self.machine.push(value)
+        self.m.push(int(ctx.NUMBER().getText()))
         return None
 
     def visitCallInstr(self, ctx):
-        name = ctx.IDENT().getText()
-        self._execute_word(name)
+        self._execute_word(ctx.IDENT().getText())
         return None
 
     def visitBuiltinInstr(self, ctx):
-        token_text = ctx.builtin().start.text
-        m = self.machine
+        t = ctx.builtin().start.text
+        m = self.m
 
-        # --- Aritmètica ---
-        if token_text == '+':
-            b = m.pop()
+        # Aritmètica
+        if t in self.binary_ops:
+            a, b = self._pop2()
+            if a is not None:
+                m.push(self.binary_ops[t](a, b))
+            return None
+
+        # Relacionals
+        if t in self.rel_ops:
+            a, b = self._pop2()
+            if a is not None:
+                m.push(self.rel_ops[t](a, b))
+            return None
+
+        # Booleans binaris
+        if t in self.bool_ops:
+            a, b = self._pop2()
+            if a is not None:
+                m.push(self.bool_ops[t](a, b))
+            return None
+
+        # Boolean unari: not
+        if t == 'not':
             a = m.pop()
-            if a is None or b is None:
-                return None
-            m.push(a + b)
+            if a is not None:
+                m.push(0 if a != 0 else -1)
+            return None
 
-        elif token_text == '-':
-            b = m.pop()
-            a = m.pop()
-            if a is None or b is None:
-                return None
-            m.push(a - b)
-
-        elif token_text == '*':
-            b = m.pop()
-            a = m.pop()
-            if a is None or b is None:
-                return None
-            m.push(a * b)
-
-        elif token_text == '/':
-            b = m.pop()
-            a = m.pop()
-            if a is None or b is None:
-                return None
-            if b == 0:
-                print("Error: divisió per zero!")
-                m.push(0)
-            else:
-                m.push(a // b)
-
-        elif token_text == 'mod':
-            b = m.pop()
-            a = m.pop()
-            if a is None or b is None:
-                return None
-            if b == 0:
-                print("Error: divisió per zero!")
-                m.push(0)
-            else:
-                m.push(a % b)
-
-        # --- Sortida ---
-        elif token_text == '.':
+        # Sortida
+        if t == '.':
             m.print_top()
-
-        elif token_text == '.s':
+            return None
+        if t == '.s':
             m.show_stack()
+            return None
 
-        # --- Manipulació de la pila ---
+        # Manipulació de la pila
+        if t == 'swap':
+            a, b = self._pop2()
+            if a is not None:
+                m.push(b)
+                m.push(a)
+            return None
 
-        elif token_text == 'swap':
-            b = m.pop()
-            a = m.pop()
-            if a is None or b is None:
-                return None
-            m.push(b)
-            m.push(a)
-
-        elif token_text == '2swap':
-            d = m.pop()
-            c = m.pop()
-            b = m.pop()
-            a = m.pop()
-            if None in (a, b, c, d):
-                return None
-            m.push(c)
-            m.push(d)
-            m.push(a)
-            m.push(b)
-
-        elif token_text == 'dup':
-            a = m.peek()
-            if a is None:
-                return None
-            m.push(a)
-
-        elif token_text == '2dup':
-            b = m.pop()
-            a = m.pop()
-            if a is None or b is None:
-                return None
-            m.push(a)
-            m.push(b)
-            m.push(a)
-            m.push(b)
-
-        elif token_text == 'over':
-            # cal com a mínim 2 elements
-            if len(m.stack) < 2:
-                print("Error: pila buida!")
-                return None
-            a = m.stack[-2]
-            m.push(a)
-
-        elif token_text == '2over':
-            # cal com a mínim 4 elements
+        if t == '2swap':
             if len(m.stack) < 4:
                 print("Error: pila buida!")
                 return None
-            a = m.stack[-4]
-            b = m.stack[-3]
+            a, b, c, d = m.stack[-4:]
+            m.stack[-4:] = [c, d, a, b]
+            return None
+
+        if t == 'dup':
+            a = m.peek()
+            if a is not None:
+                m.push(a)
+            return None
+
+        if t == '2dup':
+            if len(m.stack) < 2:
+                print("Error: pila buida!")
+                return None
+            a, b = m.stack[-2:]
             m.push(a)
             m.push(b)
+            return None
 
-        elif token_text == 'rot':
-            c = m.pop()
-            b = m.pop()
-            a = m.pop()
-            if None in (a, b, c):
+        if t == 'over':
+            if len(m.stack) < 2:
+                print("Error: pila buida!")
                 return None
-            m.push(b)
-            m.push(c)
+            m.push(m.stack[-2])
+            return None
+
+        if t == '2over':
+            if len(m.stack) < 4:
+                print("Error: pila buida!")
+                return None
+            a, b = m.stack[-4], m.stack[-3]
             m.push(a)
+            m.push(b)
+            return None
 
-        elif token_text == 'drop':
+        if t == 'rot':
+            if len(m.stack) < 3:
+                print("Error: pila buida!")
+                return None
+            a, b, c = m.stack[-3:]
+            m.stack[-3:] = [b, c, a]
+            return None
+
+        if t == 'drop':
             m.pop()
+            return None
 
-        elif token_text == '2drop':
+        if t == '2drop':
             m.pop()
             m.pop()
+            return None
 
-        # --- Relacionals ---
-        elif token_text == '<':
-            b = m.pop()
-            a = m.pop()
-            if a is None or b is None:
-                return None
-            m.push(-1 if a < b else 0)
-
-        elif token_text == '<=':
-            b = m.pop()
-            a = m.pop()
-            if a is None or b is None:
-                return None
-            m.push(-1 if a <= b else 0)
-
-        elif token_text == '>':
-            b = m.pop()
-            a = m.pop()
-            if a is None or b is None:
-                return None
-            m.push(-1 if a > b else 0)
-
-        elif token_text == '>=':
-            b = m.pop()
-            a = m.pop()
-            if a is None or b is None:
-                return None
-            m.push(-1 if a >= b else 0)
-
-        elif token_text == '=':
-            b = m.pop()
-            a = m.pop()
-            if a is None or b is None:
-                return None
-            m.push(-1 if a == b else 0)
-
-        elif token_text == '<>':
-            b = m.pop()
-            a = m.pop()
-            if a is None or b is None:
-                return None
-            m.push(-1 if a != b else 0)
-
-        # --- Booleans ---
-        elif token_text == 'and':
-            b = m.pop()
-            a = m.pop()
-            if a is None or b is None:
-                return None
-            a_true = (a != 0)
-            b_true = (b != 0)
-            m.push(-1 if (a_true and b_true) else 0)
-
-        elif token_text == 'or':
-            b = m.pop()
-            a = m.pop()
-            if a is None or b is None:
-                return None
-            a_true = (a != 0)
-            b_true = (b != 0)
-            m.push(-1 if (a_true or b_true) else 0)
-
-        elif token_text == 'not':
-            a = m.pop()
-            if a is None:
-                return None
-            a_true = (a != 0)
-            m.push(0 if a_true else -1)
-
-        # --- Recursivitat ---
-        elif token_text == 'recurse':
+        # Recursivitat
+        if t == 'recurse':
             if self.call_stack:
                 self._execute_word(self.call_stack[-1])
+            return None
 
         return None
 
+    # ---------------------------
+    # If / Else / Endif
+    # ---------------------------
+
     def visitIfInstr(self, ctx):
-        """
-        condició if codi_cert else codi_fals endif
-        """
-        cond = self.machine.pop()
-        true_branch = (
-            list(ctx.trueBranch)
-            if ctx.trueBranch is not None
-            else []
-        )
-
-        false_branch = (
-            list(ctx.falseBranch)
-            if ctx.falseBranch is not None
-            else []
-        )
-
-        # qualsevol valor != 0 es tracta com a cert
-        if cond != 0:
-            for instr in true_branch:
+        cond = self.m.pop()
+        branch = ctx.trueBranch if cond != 0 else ctx.falseBranch
+        if branch:
+            for instr in branch:
                 self.visit(instr)
-        else:
-            for instr in false_branch:
-                self.visit(instr)
-
         return None

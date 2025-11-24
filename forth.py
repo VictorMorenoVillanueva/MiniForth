@@ -8,19 +8,16 @@ from machine import Machine
 from visitor_user import ForthExecutor
 
 
-def interpret(code: str):
-    """
-    Interpreta un programa mini-Forth passat com string.
-    Retorna l'últim valor mostrat (. o .s), si n'hi ha.
-    """
+def interpret(code: str) -> None:
+    """Intèrpret de mini Forth. Rep un string i executa el programa."""
     input_stream = InputStream(code)
     lexer = forthLexer(input_stream)
-    token_stream = CommonTokenStream(lexer)
-    parser = forthParser(token_stream)
-
+    tokens = CommonTokenStream(lexer)
+    parser = forthParser(tokens)
     tree = parser.program()
 
     machine = Machine()
     executor = ForthExecutor(machine)
     executor.visit(tree)
-    return None
+
+
