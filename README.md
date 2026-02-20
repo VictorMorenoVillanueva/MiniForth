@@ -3,7 +3,7 @@
 **Q1 2025–2026**
 
 Autor: *Víctor Moreno Villanueva*  
-
+Nota: *10*
 ---
 
 ## Descripció del projecte
